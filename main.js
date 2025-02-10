@@ -1,4 +1,8 @@
-const { InstanceBase, Regex, runEntrypoint, InstanceStatus, combineRgb } = require('@companion-module/base')
+const { InstanceBase, Regex, runEntrypoint, InstanceStatus } = require('@companion-module/base')
+const UpgradeScripts = require('./upgrades')
+const UpdateActions = require('./actions')
+const UpdateFeedbacks = require('./feedbacks')
+const UpdateVariableDefinitions = require('./variables')
 const WebSocket = require('ws')
 
 class TfcRouteInstance extends InstanceBase {
@@ -9,22 +13,12 @@ class TfcRouteInstance extends InstanceBase {
 
 	async init(config) {
 		this.config = config
+
 		this.updateStatus(InstanceStatus.Connecting)
 		this.initWebSocket()
-		this.initActions()
-		this.initVariables()
-		this.initFeedbacks()
-	}
-
-	initVariables() {
-		this.setVariableDefinitions([
-			{
-				name: 'Selected Target',
-				variableId: 'selected_target',
-			},
-		])
-		// Set initial variable
-		this.setVariableValues({ selected_target: 'None' })
+		this.updateActions() // export actions
+		this.updateFeedbacks() // export feedbacks
+		this.updateVariableDefinitions() // export variable definitions
 	}
 
 	initWebSocket() {
@@ -46,11 +40,26 @@ class TfcRouteInstance extends InstanceBase {
 
 		this.ws.on('close', () => {
 			this.updateStatus(InstanceStatus.Disconnected)
-			// Reconnect after 5 seconds
 			setTimeout(() => this.initWebSocket(), 5000)
 		})
+
+		// this.ws.on('message', (message) => {
+		// 	this.log('debug', 'Received message: ' + message)
+		// })
+	}
+	// When module gets deleted
+	async destroy() {
+		this.log('debug', 'destroy')
+		if (this.ws) {
+			this.ws.close()
+		}
 	}
 
+	async configUpdated(config) {
+		this.config = config
+	}
+
+	// Return config fields for web config
 	getConfigFields() {
 		return [
 			{
@@ -78,174 +87,40 @@ class TfcRouteInstance extends InstanceBase {
 		]
 	}
 
-	async destroy() {
-		if (this.ws) {
-			this.ws.close()
+	tfcRoute(id, level, source, target) {
+		const request = {
+			request_id: id,
+			target_tag: target,
+			request: [
+				{
+					level: level,
+					source_tag: source,
+				}
+			],
+			type: 'route-request',
+			username: '',
+			panel: this.config.panel,
+		}
+
+		if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+			this.ws.send(JSON.stringify(request))
+			this.log('debug', `Sent route request to ${this.config.url}: ${JSON.stringify(request)}`)
+		} else {
+			this.log('error', 'WebSocket not connected')
 		}
 	}
 
-	initActions() {
-		this.setActionDefinitions({
-			setTarget: {
-				name: 'Set Target',
-				options: [
-					{
-						type: 'textinput',
-						label: 'Target Tag',
-						id: 'targetTag',
-						default: '',
-					},
-				],
-				callback: async (action) => {
-					this.selectedTarget = action.options.targetTag.trim()
-					this.setVariableValues({ 
-						selected_target: this.selectedTarget || 'None' 
-					})
-					this.checkFeedbacks('targetSelected')
-					this.log('debug', 'Selected Target: ' + this.selectedTarget)
-				},
-			},
-			routeToTarget: {
-				name: 'Route Source to Target',
-				options: [
-					{
-						type: 'textinput',
-						label: 'Source Tag',
-						id: 'sourceTag',
-						default: '',
-					},
-					{
-						type: 'textinput',
-						label: 'Target Tag',
-						id: 'targetTag',
-						default: '',
-					},
-					{
-						type: 'checkbox',
-						label: 'Include Audio',
-						id: 'includeAudio',
-						default: true,
-					},
-				],
-				callback: async (action) => {
-					const requestId = `${Date.now()}`
-					
-					const request = {
-						request_id: requestId,
-						target_tag: action.options.targetTag.trim(),
-						request: [
-							{
-								level: 'video',
-								source_tag: action.options.sourceTag.trim(),
-							},
-						],
-						type: 'route-request',
-						username: '',
-						panel: this.config.panel,
-					}
-
-					if (action.options.includeAudio) {
-						request.request.push({
-							level: 'audio1',
-							source_tag: action.options.sourceTag.trim(),
-						})
-					}
-
-					if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-						this.ws.send(JSON.stringify(request))
-						this.log('debug', `Sent route request to ${this.config.url}: ${JSON.stringify(request)}`)
-					} else {
-						this.log('error', 'WebSocket not connected')
-					}
-				},
-			},
-			routeToVariable: {
-				name: 'Route Source to Selected Target',
-				options: [
-					{
-						type: 'textinput',
-						label: 'Source Tag',
-						id: 'sourceTag',
-						default: '',
-					},
-					{
-						type: 'checkbox',
-						label: 'Include Audio',
-						id: 'includeAudio',
-						default: true,
-					},
-				],
-				callback: async (action) => {
-					if (!this.selectedTarget) {
-						this.log('error', 'No target selected')
-						return
-					}
-
-					const requestId = `${Date.now()}`
-					
-					const request = {
-						request_id: requestId,
-						target_tag: this.selectedTarget,
-						request: [
-							{
-								level: 'video',
-								source_tag: action.options.sourceTag.trim(),
-							},
-						],
-						type: 'route-request',
-						username: '',
-						panel: this.config.panel,
-					}
-
-					if (action.options.includeAudio) {
-						request.request.push({
-							level: 'audio1',
-							source_tag: action.options.sourceTag.trim(),
-						})
-					}
-					this.log('debug', 'Source Tag: ' + action.options.sourceTag)
-					this.log('debug', 'JSON String: ' + JSON.stringify(request))
-					if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-						this.ws.send(JSON.stringify(request))
-						this.log('debug', `Sent route request to ${this.config.url}: ${JSON.stringify(request)}`)
-					} else {
-						this.log('error', 'WebSocket not connected')
-					}
-				},
-			},
-		})
+	updateActions() {
+		UpdateActions(this)
 	}
 
-	initFeedbacks() {
-		this.setFeedbackDefinitions({
-			targetSelected: {
-				type: 'boolean',
-				name: 'Target is selected',
-				description: 'Changes style when a specific target is selected',
-				defaultStyle: {
-					bgcolor: combineRgb(255, 0, 0),
-					color: combineRgb(255, 255, 255),
-				},
-				options: [
-					{
-						type: 'textinput',
-						label: 'Target Tag',
-						id: 'targetTag',
-						default: '',
-					},
-				],
-				callback: (feedback) => {
-					return this.selectedTarget === feedback.options.targetTag.trim()
-
-				},
-			},
-		})
+	updateFeedbacks() {
+		UpdateFeedbacks(this)
 	}
 
-	async configUpdated(config) {
-		this.config = config
-		this.initWebSocket()
+	updateVariableDefinitions() {
+		UpdateVariableDefinitions(this)
 	}
 }
 
-runEntrypoint(TfcRouteInstance, [])
+runEntrypoint(TfcRouteInstance, UpgradeScripts)
