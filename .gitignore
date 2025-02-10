@@ -51,3 +51,9 @@ Desktop.ini
 # Build outputs
 dist/
 build/ 
+
+/pkg
+/pkg.tgz
+
+DEBUG-*
+/.yarn
