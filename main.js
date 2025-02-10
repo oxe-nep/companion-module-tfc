@@ -8,7 +8,7 @@ const WebSocket = require('ws')
 class TfcRouteInstance extends InstanceBase {
 	constructor(internal) {
 		super(internal)
-		this.selectedTarget = null
+		this.selectedTarget = {}
 	}
 
 	async init(config) {
@@ -128,9 +128,24 @@ class TfcRouteInstance extends InstanceBase {
 		}
 	}
 
+	selectTarget(action, target) {
+		
+		if (this.selectedTarget[action.surfaceId]) {
+			delete this.selectedTarget[action.surfaceId]
+		}
+
+		try {
+			this.selectedTarget[action.surfaceId] = target
+			this.log('debug', `Selected target ${target} for surface ${action.surfaceId}`)
+		} catch (error) {
+			this.log('error', `Error selecting target: ${error.message}`)
+		}
+	}
+
+
 	parseMessage(message) {
 		const parsedMessage = JSON.parse(message)
-		this.log('debug', `Received message: ${JSON.stringify(parsedMessage)}`)
+		// this.log('debug', `Received message: ${JSON.stringify(parsedMessage)}`)
 		if (parsedMessage.type === 'route-response') {
 			this.log('debug', `Received route response: ${JSON.stringify(parsedMessage)}`)
 		}
