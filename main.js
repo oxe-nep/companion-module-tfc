@@ -130,17 +130,30 @@ class TfcRouteInstance extends InstanceBase {
 
 	selectTarget(action, target) {
 		
-		if (this.selectedTarget[action.surfaceId]) {
-			delete this.selectedTarget[action.surfaceId]
-		}
+		this.clearTargetForSurface(action.surfaceId)
 
 		try {
 			this.selectedTarget[action.surfaceId] = target
+			this.selectedTarget[action.controlId] = target
+			this.log('debug', `Selected target ${target} for control ${action.controlId}`)
 			this.log('debug', `Selected target ${target} for surface ${action.surfaceId}`)
 		} catch (error) {
 			this.log('error', `Error selecting target: ${error.message}`)
 		}
 	}
+	getSelectedTarget(id) {
+		return this.selectedTarget[id] || null
+	}
+	clearTargetForSurface(surfaceId) {
+		const toRemove = this.selectedTarget[surfaceId]
+		Object.entries(this.selectedTarget).forEach(([key, value]) => {
+			if (value === toRemove) {
+				delete this.selectedTarget[key]
+			}
+		})
+	}
+
+
 
 
 	parseMessage(message) {

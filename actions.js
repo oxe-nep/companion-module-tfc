@@ -59,6 +59,7 @@ module.exports = function (self) {
 				try {
 					if (action.options.targetTag != undefined) {
 						self.selectTarget(action, action.options.targetTag)
+						self.checkFeedbacks('targetSelected')
 					}
 				} catch (error) {
 					self.log('error', 'Error selecting target: ' + error.message)
