@@ -1,0 +1,26 @@
+{
+	"id": "tfc-routing",
+	"name": "tfc-routing",
+	"shortname": "tfc-routing",
+	"description": "Module for controlling NEP TFC via Websocket",
+	"version": "1.0.0",
+	"license": "MIT",
+	"repository": "git+https://github.com/oxe-nep/companion-module-tfc.git",
+	"bugs": "https://github.com/bitfocus/companion-module-tfc/issues",
+	"maintainers": [
+		{
+			"name": "David Oxe",
+			"email": "doxe@nepgroup.com"
+		}
+	],
+	"runtime": {
+		"type": "node18",
+		"api": "nodejs-ipc",
+		"apiVersion": "0.0.0",
+		"entrypoint": "../main.js"
+	},
+	"legacyIds": [],
+	"manufacturer": "NEP Sweden AB",
+	"products": ["TFC"],
+	"keywords": []
+}

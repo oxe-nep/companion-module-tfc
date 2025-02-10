@@ -1,0 +1,25 @@
+{
+  "name": "companion-module-tfc",
+  "version": "1.0.0",
+  "description": "Companion module for TFC",
+  "main": "main.js",
+  "scripts": {
+    "format": "prettier -w .",
+    "package": "companion-module-build"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/oxe-nep/companion-module-tfc.git"
+  },
+  "dependencies": {
+    "@companion-module/base": "^1.11.3",
+    "ws": "^8.11.0"
+  },
+  "devDependencies": {
+    "@companion-module/tools": "^2.1.1",
+    "prettier": "^3.4.2"
+  },
+  "prettier": "@companion-module/tools/.prettierrc.json",
+  "packageManager": "yarn@4.5.3"
+}
