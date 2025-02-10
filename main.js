@@ -43,9 +43,27 @@ class TfcRouteInstance extends InstanceBase {
 			setTimeout(() => this.initWebSocket(), 5000)
 		})
 
-		// this.ws.on('message', (message) => {
-		// 	this.log('debug', 'Received message: ' + message)
-		// })
+		this.ws.on('message', (message) => {
+			// this.log('debug', 'Received message: ' + message)
+			const messageStr = message.toString()
+
+			if (messageStr === 'ping') {
+				// this.log('debug', 'Received Ping, sending Pong')
+				if (this.ws && this.ws.readyState === WebSocket.OPEN) {	
+					this.ws.send('pong')
+				}
+				return
+			}
+
+			try {
+				this.parseMessage(messageStr)
+			} catch (error) {
+				this.log('error', 'Error parsing message: ' + error.message)
+			}
+
+
+
+		})
 	}
 	// When module gets deleted
 	async destroy() {
@@ -109,6 +127,15 @@ class TfcRouteInstance extends InstanceBase {
 			this.log('error', 'WebSocket not connected')
 		}
 	}
+
+	parseMessage(message) {
+		const parsedMessage = JSON.parse(message)
+		this.log('debug', `Received message: ${JSON.stringify(parsedMessage)}`)
+		if (parsedMessage.type === 'route-response') {
+			this.log('debug', `Received route response: ${JSON.stringify(parsedMessage)}`)
+		}
+	}
+
 
 	updateActions() {
 		UpdateActions(this)
