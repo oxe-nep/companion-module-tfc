@@ -16,27 +16,32 @@ export function UpdateActions(self: TfcRouteInstance) {
 						}),
 					default: 'undefined',
 				},
+				{
+					type: 'number',
+					label: 'Routing Domain',
+					id: 'routingDomain',
+					default: 0,
+					min: 0,
+					max: 999,
+				},
 			],
 			callback: async (event) => {
-				// if the target is selected we deselect it:
-				if (self.selectedControlTarget.get(event.controlId) == event.options.target) {
-					self.log(
-						'debug',
-						`De-Select Target: ${event.options.target} from ControlId ${event.controlId ?? 'undefined'}`,
-					)
-					if (event.surfaceId) {
-						self.selectedSurfaceTarget.delete(event.surfaceId)
-					}
-					self.selectedControlTarget.delete(event.controlId)
+				const routingDomain = event.options.routingDomain as number
+				const targetId = event.options.target as string
+				const currentSelected = self.selector.getTarget(routingDomain)
+
+				if (targetId === currentSelected?.id) {
+					// deselect target
+					self.selector.deleteTarget(routingDomain)
 				} else {
-					self.log(
-						'debug',
-						`Select Target: ${event.options.target} from ControlId ${event.controlId} SurfaceId ${event.surfaceId}`,
-					)
-					self.selectedControlTarget.set(event.controlId ?? 'undefined', String(event.options.target))
-					self.selectedSurfaceTarget.set(event.surfaceId ?? 'undefined', String(event.options.target))
+					// select target
+					const target = self.panel.targets.find((target) => target?.id === targetId)
+					if (target !== undefined) {
+						self.selector.setTarget(routingDomain, target)
+					}
 				}
-				self.checkFeedbacks('ChannelState')
+
+				self.checkFeedbacks('selectedTarget', 'routedSource')
 			},
 		},
 		routeSelectedToTarget: {
@@ -71,26 +76,30 @@ export function UpdateActions(self: TfcRouteInstance) {
 					id: 'meta',
 					default: false,
 				},
+				{
+					type: 'number',
+					label: 'Routing Domain',
+					id: 'routingDomain',
+					default: 0,
+					min: 0,
+					max: 999,
+				},
 			],
 			callback: async (event) => {
-				const routeLevels: ('video' | 'audio1' | 'meta' | '')[] = [
-					event.options.video ? 'video' : '',
-					event.options.audio ? 'audio1' : '',
-					event.options.meta ? 'meta' : '',
-				]
+				const routingDomain = event.options.routingDomain as number
+				const source = event.options.source as string
+				const selectedTarget = self.selector.getTarget(routingDomain)
 
-				const selectedTarget = self.selectedSurfaceTarget.get(event.surfaceId ?? 'undefined')
-				if (
-					selectedTarget != undefined &&
-					selectedTarget != 'undefined' &&
-					event.options.source != undefined &&
-					event.options.source != 'undefined'
-				)
-					self.tfcRoute(
-						routeLevels.filter((level) => level != ''),
-						`${event.options.source}`,
-						selectedTarget,
-					)
+				if (selectedTarget == undefined || source == 'undefined') {
+					return
+				}
+
+				const routeLevels: ('video' | 'audio1' | 'meta')[] = []
+				if (event.options.video) routeLevels.push('video')
+				if (event.options.audio) routeLevels.push('audio1')
+				if (event.options.meta) routeLevels.push('meta')
+
+				self.tfcRoute(routeLevels, source, selectedTarget.id)
 			},
 		},
 		routeSourceToTarget: {
@@ -138,25 +147,15 @@ export function UpdateActions(self: TfcRouteInstance) {
 				},
 			],
 			callback: async (event) => {
-				const routeLevels: ('video' | 'audio1' | 'meta' | '')[] = [
-					event.options.video ? 'video' : '',
-					event.options.audio ? 'audio1' : '',
-					event.options.meta ? 'meta' : '',
-				]
+				const routeLevels: ('video' | 'audio1' | 'meta')[] = []
+				if (event.options.video) routeLevels.push('video')
+				if (event.options.audio) routeLevels.push('audio1')
+				if (event.options.meta) routeLevels.push('meta')
 
-				const selectedSource = `${event.options.source}`
-				const selectedTarget = `${event.options.target}`
-				if (
-					selectedTarget != undefined &&
-					selectedTarget != 'undefined' &&
-					selectedSource != undefined &&
-					selectedSource != 'undefined'
-				)
-					self.tfcRoute(
-						routeLevels.filter((level) => level != ''),
-						selectedSource,
-						selectedTarget,
-					)
+				const selectedSource = event.options.source as string
+				const selectedTarget = event.options.target as string
+				if (selectedTarget != 'undefined' && selectedSource != 'undefined')
+					self.tfcRoute(routeLevels, selectedSource, selectedTarget)
 			},
 		},
 	})

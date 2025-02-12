@@ -38,7 +38,7 @@ export class TFC extends EventEmitter {
 		this._ws.on('close', (code, reason) => this.onClose(code, `${reason}`))
 		this._ws.on('error', (error) => this.onError(error))
 		this._ws.on('message', (data, isBinary) => this.onMessage(data, isBinary))
-		this._ws.on('ping', () => this.#onPing())
+		this._ws.on('ping', () => this.onPing())
 	}
 
 	/**
@@ -101,7 +101,7 @@ export class TFC extends EventEmitter {
 	}
 
 	private onOpen() {
-		this.#heartbeat()
+		this.heartbeat()
 		this.emit('connect')
 	}
 
@@ -133,7 +133,7 @@ export class TFC extends EventEmitter {
 		const messageString = data.toString()
 
 		if (messageString == 'ping') {
-			this.#onPing()
+			this.onPing()
 			return
 		} else if (messageString == 'pong') {
 			return
@@ -149,10 +149,8 @@ export class TFC extends EventEmitter {
 			// try to resolve the Promise from above. The callstack tells us
 			// if the request_id was indeed from us (it ignores request_id's
 			// it doesn't know)
-			const fromUs = this._callStack.resolve(message.request_id)
-			// if the route was not done by us we inform the clients for further
-			// processing.
-			if (!fromUs) this.emit('route', message)
+			this._callStack.resolve(message.request_id)
+			this.emit('route', message)
 			return
 		}
 
@@ -171,11 +169,11 @@ export class TFC extends EventEmitter {
 	 *
 	 * @param {Buffer<ArrayBufferLike>} data
 	 */
-	#onPing() {
+	private onPing() {
 		if (this._ws.readyState == WebSocket.OPEN) {
 			this._ws.pong()
 		}
-		this.#heartbeat()
+		this.heartbeat()
 	}
 
 	/**
@@ -183,7 +181,7 @@ export class TFC extends EventEmitter {
 	 * received ping message. If it is not called, the timer will timeout and trigger
 	 * a disconnect from the TFC.
 	 */
-	#heartbeat() {
+	private heartbeat() {
 		this._isAlive = true
 
 		if (this._isAliveTimer) {

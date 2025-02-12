@@ -6,22 +6,21 @@ import { UpdateActions } from './actions.js'
 import { UpdateFeedbacks } from './feedbacks.js'
 import { TFC } from './tfc/TFC.js'
 import { Panel } from './tfc/Panel.js'
+import { TargetSelector } from './select.js'
 
 export class TfcRouteInstance extends InstanceBase<ModuleConfig> {
 	config!: ModuleConfig
-	selectedControlTarget: Map<string, string>
-	selectedSurfaceTarget: Map<string, string>
 	connection!: TFC | null
 	panel!: Panel
+	selector!: TargetSelector
 
 	constructor(internal: unknown) {
 		super(internal)
-		this.selectedControlTarget = new Map<string, string>()
-		this.selectedSurfaceTarget = new Map<string, string>()
 	}
 
 	async init(config: ModuleConfig): Promise<void> {
 		this.config = config
+		this.selector = new TargetSelector()
 
 		if (!this.config.panel || this.config.url == 'xxxx.nepgroup.io' || !this.config.username || !this.config.password) {
 			this.updateStatus(InstanceStatus.BadConfig)
@@ -48,8 +47,25 @@ export class TfcRouteInstance extends InstanceBase<ModuleConfig> {
 			this.connection.on('error', (error) => {
 				this.log('error', error)
 			})
+
 			this.connection.on('route', (update) => {
-				this.log('info', `received route update: ${JSON.stringify(update)}`)
+				this.log('debug', `received route update: ${JSON.stringify(update)}`)
+				this.panel.targets.forEach((target) => {
+					if (target === undefined || target.id !== update.target_tag) return
+
+					target.sources.forEach((source) => {
+						const newSource = update.result.find((newSource) => newSource.level === source.level)
+						if (newSource === undefined) return
+
+						source.id = newSource.source_tag
+						this.log(
+							'debug',
+							`update route state of target: '${target.id}', level: '${source.level}', source: '${source.id}'`,
+						)
+					})
+				})
+
+				this.checkFeedbacks('routedSource')
 			})
 
 			await this.connection.authorize(this.config.username, this.config.password)
