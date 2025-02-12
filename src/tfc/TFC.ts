@@ -1,9 +1,10 @@
 import { EventEmitter } from 'events'
-import { ClientRequest, IncomingMessage } from 'http'
 import { WebSocket } from 'ws'
 import { TFCRequest, TFCResponse, TFCRouteSource } from './Message.js'
 import { CallStack } from './CallStack.js'
 import { v4 as UUID } from 'uuid'
+import { authRequest } from './request.js'
+import { getPanelBySlug } from './Panel.js'
 
 export interface TFCEvents {
 	connect: () => void
@@ -22,18 +23,21 @@ export class TFC extends EventEmitter {
 	private _isAlive: boolean
 	private _isAliveTimer!: null | NodeJS.Timeout
 	private _callStack: CallStack
+	private _location: string
+	private _authToken: string
 
-	constructor(url: string, sendTimeout: number) {
+	constructor(location: string, sendTimeout: number) {
 		super()
-		this._ws = new WebSocket(url)
+		this._ws = new WebSocket(`wss://controlws.${location}/routing`)
 		this._isAlive = false
 		this._callStack = new CallStack(sendTimeout)
+		this._location = location
+		this._authToken = ''
 
 		this._ws.on('open', () => this.onOpen())
-		this._ws.on('close', (code, reason) => this.onClose(code, reason))
+		this._ws.on('close', (code, reason) => this.onClose(code, `${reason}`))
 		this._ws.on('error', (error) => this.onError(error))
 		this._ws.on('message', (data, isBinary) => this.onMessage(data, isBinary))
-		this._ws.on('unexpected-response', (request, response) => this.onUnexpected(request, response))
 		this._ws.on('ping', () => this.#onPing())
 	}
 
@@ -64,7 +68,17 @@ export class TFC extends EventEmitter {
 	}
 
 	close() {
-		this._ws.close()
+		this.onClose(200, 'closed by client')
+	}
+
+	authorize(username: string, password: string) {
+		return authRequest(this._location, username, password).then((authToken) => {
+			this._authToken = authToken
+		})
+	}
+
+	getPanel(slug: string) {
+		return getPanelBySlug(this._location, this._authToken, slug)
 	}
 
 	/**
@@ -91,8 +105,17 @@ export class TFC extends EventEmitter {
 		this.emit('connect')
 	}
 
-	private onClose(code: number, reason: Buffer) {
-		console.log(code, reason)
+	private onClose(code: number, reason: string) {
+		this._isAlive = false
+		try {
+			this._ws.close(code, reason)
+		} catch (error) {
+			this.onError(new Error(`${error}`))
+		}
+		if (this._isAliveTimer) {
+			clearTimeout(this._isAliveTimer)
+			this._isAliveTimer = null
+		}
 		this.emit('disconnect')
 	}
 
@@ -141,10 +164,6 @@ export class TFC extends EventEmitter {
 		}
 	}
 
-	private onUnexpected(request: ClientRequest, response: IncomingMessage) {
-		console.log(request, response)
-	}
-
 	/**
 	 * TFC sends periodic pings but it seems they don't care about
 	 * our pings and pongs. That's why we use TFCs ping to keep track
@@ -174,10 +193,7 @@ export class TFC extends EventEmitter {
 
 		this._isAliveTimer = setTimeout(
 			(self) => {
-				self.emit('disconnect')
-				self._isAlive = false
-				self._ws.close(500, 'no ping for 10 seconds')
-				self.onError(new Error('connection loss, no ping for 10 seconds'))
+				self.onClose(400, 'connection loss, no ping for 10 seconds')
 			},
 			10000,
 			this,

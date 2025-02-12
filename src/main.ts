@@ -5,59 +5,67 @@ import { UpgradeScripts } from './upgrades.js'
 import { UpdateActions } from './actions.js'
 import { UpdateFeedbacks } from './feedbacks.js'
 import { TFC } from './tfc/TFC.js'
+import { Panel } from './tfc/Panel.js'
 
 export class TfcRouteInstance extends InstanceBase<ModuleConfig> {
 	config!: ModuleConfig
-	selectedTarget: string | null
+	selectedControlTarget: Map<string, string>
+	selectedSurfaceTarget: Map<string, string>
 	connection!: TFC | null
+	panel!: Panel
 
 	constructor(internal: unknown) {
 		super(internal)
-		this.selectedTarget = null
+		this.selectedControlTarget = new Map<string, string>()
+		this.selectedSurfaceTarget = new Map<string, string>()
 	}
 
 	async init(config: ModuleConfig): Promise<void> {
 		this.config = config
 
+		if (!this.config.panel || this.config.url == 'xxxx.nepgroup.io' || !this.config.username || !this.config.password) {
+			this.updateStatus(InstanceStatus.BadConfig)
+			return
+		}
+
 		this.updateStatus(InstanceStatus.Connecting)
-		this.initConnection()
+		await this.initConnection()
 		this.updateActions() // export actions
 		this.updateFeedbacks() // export feedbacks
 		this.updateVariableDefinitions() // export variable definitions
 	}
 
-	initConnection() {
-		if (this.connection) {
-			this.connection.close()
-		}
-
+	async initConnection() {
 		try {
 			this.connection = new TFC(this.config.url, 5000)
-		} catch {
+			this.log('debug', 'try authorize')
+			this.connection.on('connect', () => {
+				this.log('debug', 'connected to tfc')
+			})
+			this.connection.on('disconnect', () => {
+				this.updateStatus(InstanceStatus.Disconnected)
+			})
+			this.connection.on('error', (error) => {
+				this.log('error', error)
+			})
+			this.connection.on('route', (update) => {
+				this.log('info', `received route update: ${JSON.stringify(update)}`)
+			})
+
+			await this.connection.authorize(this.config.username, this.config.password)
+			this.log('debug', 'successfully authorized')
+
+			this.panel = await this.connection.getPanel(this.config.panel)
+			this.log('debug', `fetched panel \n ${JSON.stringify(this.panel)}`)
+			this.updateStatus(InstanceStatus.Ok)
+		} catch (error) {
+			this.log('error', `${error}`)
 			this.updateStatus(InstanceStatus.BadConfig)
 			return
 		}
-
-		this.connection.on('connect', () => {
-			this.updateStatus(InstanceStatus.Ok)
-			this.log('debug', 'connected to tfc')
-		})
-		this.connection.on('disconnect', () => {
-			this.updateStatus(InstanceStatus.Disconnected)
-			setTimeout(() => {
-				this.initConnection()
-			}, 5000)
-		})
-		this.connection.on('error', (error) => {
-			this.log('error', error)
-		})
-		this.connection.on('route', (update) => {
-			this.log('info', `received route update: ${JSON.stringify(update)}`)
-		})
 	}
 	// When module gets deleted
 	async destroy() {
-		this.log('debug', 'destroy')
 		if (this.connection) {
 			this.connection.close()
 			this.connection = null
@@ -66,6 +74,8 @@ export class TfcRouteInstance extends InstanceBase<ModuleConfig> {
 
 	async configUpdated(config: ModuleConfig) {
 		this.config = config
+		this.destroy()
+		return this.init(config)
 	}
 
 	// Return config fields for web config
@@ -73,10 +83,22 @@ export class TfcRouteInstance extends InstanceBase<ModuleConfig> {
 		return GetConfigFields()
 	}
 
-	tfcRoute(level: 'video' | 'audio1' | 'meta', source: string, target: string) {
-		this.connection?.route(this.config.panel, target, { source_tag: source, level: level }).then(() => {
-			this.log('debug', `Sent route request to ${this.config.url}: SOURCE ${source}, TARGET ${target}`)
-		})
+	tfcRoute(levels: ('video' | 'audio1' | 'meta')[], source: string, target: string) {
+		return this.connection
+			?.route(
+				this.config.panel,
+				target,
+				// this defines a route for all provided levels.
+				...levels.map((level) => {
+					return { source_tag: source, level: level }
+				}),
+			)
+			.then(() => {
+				this.log('debug', `ROUTE SUCCESS: SOURCE ${source}, TARGET ${target} (levels: ${levels})`)
+			})
+			.catch((err) => {
+				this.log('error', `ROUTE FAILURE: SOURCE ${source}, TARGET ${target} (levels: ${levels}), reason ${err}`)
+			})
 	}
 
 	updateActions() {

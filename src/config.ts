@@ -3,6 +3,8 @@ import { type SomeCompanionConfigField } from '@companion-module/base'
 export interface ModuleConfig {
 	url: string
 	panel: string
+	username: string
+	password: string
 }
 
 export function GetConfigFields(): SomeCompanionConfigField[] {
@@ -12,22 +14,37 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 			id: 'info',
 			width: 12,
 			label: 'Information',
-			value: 'Configure Websocket connection to TFC Instance',
+			value: 'Configure connection to TFC Instance',
 		},
 		{
 			type: 'textinput',
 			id: 'url',
-			label: 'Router WebSocket URL',
+			label: 'TFC QFDN',
 			width: 12,
-			default: 'wss://localhost:8080',
+			default: 'xxxx.nepgroup.io',
 			required: true,
 		},
 		{
 			type: 'textinput',
 			id: 'panel',
-			label: 'Panel Name',
+			label: 'Panel Slug Name (All Panels -> Edit -> slug)',
 			width: 12,
-			default: 'Companion Panel',
+			default: 'companion',
+			required: true,
+		},
+		{
+			type: 'textinput',
+			id: 'username',
+			label: 'Username',
+			width: 12,
+			required: true,
+		},
+		{
+			type: 'textinput',
+			id: 'password',
+			label: 'Password',
+			width: 12,
+			required: true,
 		},
 	]
 }

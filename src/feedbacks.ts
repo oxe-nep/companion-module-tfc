@@ -12,21 +12,23 @@ export function UpdateFeedbacks(self: TfcRouteInstance): void {
 			},
 			options: [
 				{
-					id: 'num',
-					type: 'number',
-					label: 'Test',
-					default: 5,
-					min: 0,
-					max: 10,
+					type: 'dropdown',
+					label: 'Target',
+					id: 'target',
+					choices: self.panel.targets
+						.filter((target) => target != undefined)
+						.map((target) => {
+							return { id: target.id, label: target.name }
+						}),
+					default: 'undefined',
 				},
 			],
-			callback: (feedback) => {
-				console.log('Hello world!', feedback.options.num)
-				if (Number(feedback.options.num) > 5) {
-					return true
-				} else {
-					return false
-				}
+			callback: async (feedback) => {
+				self.log(
+					'debug',
+					`Check Feedback with ControlId ${feedback.controlId}: ${self.selectedControlTarget.get(feedback.controlId)} == ${feedback.options.target}`,
+				)
+				return self.selectedControlTarget.get(feedback.controlId) == feedback.options.target
 			},
 		},
 	})
