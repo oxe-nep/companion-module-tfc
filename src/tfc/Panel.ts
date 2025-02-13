@@ -3,11 +3,14 @@ import { getRequest } from './request.js'
 export const getPanelBySlug = (location: string, authToken: string, slug: string): Promise<Panel> =>
 	getRequest<PanelResponse>(location, authToken, `/v1/api/panels/custom/panels/${slug}`)
 		.then((panel) => getRequest<PageResponse>(location, authToken, panel._links.default_panel_page.href))
-		.then((page) =>
-			Promise.all(
-				page._embedded.section_containers
-					.map((container) => container._embedded.section)
-					.flatMap((section) => section._embedded.section_elements)
+		.then((page) => {
+			// we use the first section we find on the panel and ignore else
+			const firstSectionContainer = page._embedded.section_containers[0]
+			if (firstSectionContainer === undefined || firstSectionContainer._embedded.section == undefined) {
+				return Promise.reject('NO SECTIONS ON PANEL')
+			}
+			return Promise.all(
+				firstSectionContainer._embedded.section._embedded.section_elements
 					.filter((button) => button.type == 'source' || button.type == 'target')
 					.map((sourceTarget) =>
 						getRequest<TagResponse>(location, authToken, `/v1/api/tags/${sourceTarget.tag_id}`).then((tag) => {
@@ -17,8 +20,8 @@ export const getPanelBySlug = (location: string, authToken: string, slug: string
 							}
 						}),
 					),
-			),
-		)
+			)
+		})
 		.then((tags) => {
 			return {
 				sources: tags
@@ -26,7 +29,7 @@ export const getPanelBySlug = (location: string, authToken: string, slug: string
 					.map(({ index, tag }) => {
 						return {
 							id: tag.id,
-							name: tag.name,
+							name: tag.labels.hardware_button_label || tag.labels.user_label || tag.name,
 							index: index,
 						}
 					}),
@@ -35,7 +38,7 @@ export const getPanelBySlug = (location: string, authToken: string, slug: string
 					.map(({ index, tag }) => {
 						return {
 							id: tag.id,
-							name: tag.name,
+							name: tag.labels.hardware_button_label || tag.labels.user_label || tag.name,
 							index: index,
 							sources: tag._embedded.route_state.map((source) => {
 								return {
