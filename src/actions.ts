@@ -158,5 +158,63 @@ export function UpdateActions(self: TfcRouteInstance) {
 					self.tfcRoute(routeLevels, selectedSource, selectedTarget)
 			},
 		},
+		routeByIndex: {
+    name: 'Route by SectionIndex',
+    options: [
+        {
+            type: 'textinput',
+            label: 'Source Index',
+            id: 'sourceIndex',
+            default: '0',
+            useVariables: true,
+            tooltip: 'Use the SectionIndex value shown in variables (e.g., 0, 1, 2...)'
+        },
+        {
+            type: 'textinput',
+            label: 'Target Index',
+            id: 'targetIndex',
+            default: '0',
+            useVariables: true,
+            tooltip: 'Use the SectionIndex value shown in variables (e.g., 0, 1, 2...)'
+        },
+        {
+            type: 'checkbox',
+            label: 'Video',
+            id: 'video',
+            default: true,
+        },
+        {
+            type: 'checkbox',
+            label: 'Audio',
+            id: 'audio',
+            default: true,
+        },
+        {
+            type: 'checkbox',
+            label: 'Meta',
+            id: 'meta',
+            default: false,
+        },
+    ],
+    callback: async (event, context) => {
+        const routeLevels: ('video' | 'audio1' | 'meta')[] = []
+        if (event.options.video) routeLevels.push('video')
+        if (event.options.audio) routeLevels.push('audio1')
+        if (event.options.meta) routeLevels.push('meta')
+
+        // Parse variables to get index values
+        const sourceIndex = parseInt(await context.parseVariablesInString(event.options.sourceIndex as string))
+        const targetIndex = parseInt(await context.parseVariablesInString(event.options.targetIndex as string))
+        
+        // Find source and target by their index property
+        const selectedSource = self.panel.sources.find(source => source?.index === sourceIndex)?.id
+        const selectedTarget = self.panel.targets.find(target => target?.index === targetIndex)?.id
+        
+        if (selectedTarget && selectedSource && 
+            selectedTarget !== 'undefined' && selectedSource !== 'undefined') {
+            self.tfcRoute(routeLevels, selectedSource, selectedTarget)
+        }
+    },
+}
 	})
 }
