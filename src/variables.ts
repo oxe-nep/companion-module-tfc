@@ -1,22 +1,19 @@
-import type { TfcRouteInstance } from './main.js'
+import type { TfcRouteInstance } from './main.js';
 
 export function UpdateVariableDefinitions(self: TfcRouteInstance): void {
-	const variableArray = [...self.panel.sources, ...self.panel.targets]
-		.sort((a, b) => a?.index! - b?.index!)
-		.map((sourceTarget) => {
-			return {
-				variableId: `sectionIndex${sourceTarget?.index}`,
-				name: `Section Index ${sourceTarget?.index}`,
-				value: sourceTarget?.name,
-			}
-		})
-	const variableObject: { [key: string]: string } = {}
-	variableArray.forEach((sourceTarget) => {
-		if (sourceTarget !== undefined && sourceTarget.variableId !== undefined) {
-			variableObject[sourceTarget.variableId] = sourceTarget.value!
-		}
-	})
+	const items = [...self.panel.sources, ...self.panel.targets]
+		.filter((item): item is NonNullable<typeof item> => item != undefined)
+		.sort((a, b) => a.index - b.index);
 
-	self.setVariableDefinitions(variableArray)
-	self.setVariableValues(variableObject)
+	const definitions: { [key: string]: { name: string } } = {};
+	const values: { [key: string]: string } = {};
+
+	for (const item of items) {
+		const variableId = `sectionIndex${item.index}`;
+		definitions[variableId] = { name: `Section Index ${item.index}` };
+		values[variableId] = item.name;
+	}
+
+	self.setVariableDefinitions(definitions);
+	self.setVariableValues(values);
 }

@@ -1,10 +1,13 @@
-import { type SomeCompanionConfigField } from '@companion-module/base'
+import { type SomeCompanionConfigField } from '@companion-module/base';
 
 export interface ModuleConfig {
-	url: string
-	panel: string
-	username: string
-	password: string
+	url: string;
+	panel: string;
+	username: string;
+}
+
+export interface ModuleSecrets {
+	password: string;
 }
 
 export function GetConfigFields(): SomeCompanionConfigField[] {
@@ -22,7 +25,7 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 			label: 'TFC QFDN',
 			width: 12,
 			default: 'xxxx.nepgroup.io',
-			required: true,
+			minLength: 1,
 		},
 		{
 			type: 'textinput',
@@ -30,21 +33,21 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 			label: 'Panel Slug Name (All Panels -> Edit -> slug)',
 			width: 12,
 			default: 'companion',
-			required: true,
+			minLength: 1,
 		},
 		{
 			type: 'textinput',
 			id: 'username',
 			label: 'Username',
 			width: 12,
-			required: true,
+			minLength: 1,
 		},
 		{
-			type: 'textinput',
+			type: 'secret-text',
 			id: 'password',
 			label: 'Password',
 			width: 12,
-			required: true,
+			minLength: 1,
 		},
-	]
+	];
 }

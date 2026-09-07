@@ -1,5 +1,5 @@
-import { combineRgb } from '@companion-module/base'
-import type { TfcRouteInstance } from './main.js'
+import { combineRgb } from '@companion-module/base';
+import type { TfcRouteInstance } from './main.js';
 
 export function UpdateFeedbacks(self: TfcRouteInstance): void {
 	self.setFeedbackDefinitions({
@@ -18,7 +18,7 @@ export function UpdateFeedbacks(self: TfcRouteInstance): void {
 					choices: self.panel.targets
 						.filter((target) => target != undefined)
 						.map((target) => {
-							return { id: target.id, label: target.name }
+							return { id: target.id, label: target.name };
 						}),
 					default: 'undefined',
 				},
@@ -32,13 +32,13 @@ export function UpdateFeedbacks(self: TfcRouteInstance): void {
 				},
 			],
 			callback: async (feedback) => {
-				const targetId = feedback.options.target as string
-				const routingDomain = feedback.options.routingDomain as number
-				const selectedTarget = self.selector.getTarget(routingDomain)
+				const targetId = String(feedback.options.target);
+				const routingDomain = Number(feedback.options.routingDomain);
+				const selectedTarget = self.selector.getTarget(routingDomain);
 
-				if (targetId == 'undefined' || selectedTarget == undefined) return false
+				if (targetId == 'undefined' || selectedTarget == undefined) return false;
 
-				return selectedTarget.id == targetId
+				return selectedTarget.id == targetId;
 			},
 		},
 		routedSource: {
@@ -56,7 +56,7 @@ export function UpdateFeedbacks(self: TfcRouteInstance): void {
 					choices: self.panel.sources
 						.filter((source) => source != undefined)
 						.map((source) => {
-							return { id: source.id, label: source.name }
+							return { id: source.id, label: source.name };
 						}),
 					default: 'undefined',
 				},
@@ -70,12 +70,12 @@ export function UpdateFeedbacks(self: TfcRouteInstance): void {
 				},
 			],
 			callback: async (feedback) => {
-				const sourceId = feedback.options.source as string
-				const routingDomain = feedback.options.routingDomain as number
+				const sourceId = String(feedback.options.source);
+				const routingDomain = Number(feedback.options.routingDomain);
 
-				if (sourceId == 'undefined') return false
+				if (sourceId == 'undefined') return false;
 
-				return self.selector.hasSource(routingDomain, sourceId)
+				return self.selector.hasSource(routingDomain, sourceId);
 			},
 		},
 		routedSourceToVariableTarget: {
@@ -87,20 +87,22 @@ export function UpdateFeedbacks(self: TfcRouteInstance): void {
 			},
 			options: [
 				{
-					type: 'textinput',
-					label: 'Source Index (Variable)',
+					type: 'number',
+					label: 'Source Index',
 					id: 'sourceIndex',
-					default: '0',
-					useVariables: true,
-					tooltip: 'SectionIndex of source to check'
+					default: 0,
+					min: 0,
+					max: 999,
+					tooltip: 'SectionIndex of source to check',
 				},
 				{
-					type: 'textinput',
-					label: 'Target Index (Variable)',
+					type: 'number',
+					label: 'Target Index',
 					id: 'targetIndex',
-					default: '0',
-					useVariables: true,
-					tooltip: 'SectionIndex of target to check routing'
+					default: 0,
+					min: 0,
+					max: 999,
+					tooltip: 'SectionIndex of target to check routing',
 				},
 				{
 					type: 'checkbox',
@@ -121,41 +123,36 @@ export function UpdateFeedbacks(self: TfcRouteInstance): void {
 					default: false,
 				},
 			],
-			callback: async (feedback, context) => {
-				// Parse variables to get index values
-				const sourceIndex = parseInt(await context.parseVariablesInString(feedback.options.sourceIndex as string))
-				const targetIndex = parseInt(await context.parseVariablesInString(feedback.options.targetIndex as string))
-				
-				// Find source and target by their index property
-				const sourceId = self.panel.sources.find(source => source?.index === sourceIndex)?.id
-				const target = self.panel.targets.find(target => target?.index === targetIndex)
-				
-				if (!sourceId || !target || sourceId === 'undefined') return false
-				
-				// Check if this source is routed to this target on any of the specified levels
-				let isRouted = false
-				
+			callback: async (feedback) => {
+				const sourceIndex = Number(feedback.options.sourceIndex);
+				const targetIndex = Number(feedback.options.targetIndex);
+
+				const sourceId = self.panel.sources.find((source) => source?.index === sourceIndex)?.id;
+				const target = self.panel.targets.find((target) => target?.index === targetIndex);
+
+				if (!sourceId || !target || sourceId === 'undefined') return false;
+
+				let isRouted = false;
+
 				for (const routedSource of target.sources) {
-					// Check if this routed source matches our source ID
 					if (routedSource.id === sourceId) {
-						// Check if it's on a level we care about
 						if (feedback.options.checkVideo && routedSource.level === 'video') {
-							isRouted = true
-							break
+							isRouted = true;
+							break;
 						}
 						if (feedback.options.checkAudio && routedSource.level === 'audio1') {
-							isRouted = true
-							break
+							isRouted = true;
+							break;
 						}
 						if (feedback.options.checkMeta && routedSource.level === 'meta') {
-							isRouted = true
-							break
+							isRouted = true;
+							break;
 						}
 					}
 				}
-				
-				return isRouted
+
+				return isRouted;
 			},
 		},
-	})
+	});
 }

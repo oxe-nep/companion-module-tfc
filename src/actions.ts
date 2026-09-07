@@ -1,4 +1,4 @@
-import type { TfcRouteInstance } from './main.js'
+import type { TfcRouteInstance } from './main.js';
 
 export function UpdateActions(self: TfcRouteInstance) {
 	self.setActionDefinitions({
@@ -12,7 +12,7 @@ export function UpdateActions(self: TfcRouteInstance) {
 					choices: self.panel.targets
 						.filter((target) => target != undefined)
 						.map((target) => {
-							return { id: target.id, label: target.name }
+							return { id: target.id, label: target.name };
 						}),
 					default: 'undefined',
 				},
@@ -26,22 +26,20 @@ export function UpdateActions(self: TfcRouteInstance) {
 				},
 			],
 			callback: async (event) => {
-				const routingDomain = event.options.routingDomain as number
-				const targetId = event.options.target as string
-				const currentSelected = self.selector.getTarget(routingDomain)
+				const routingDomain = Number(event.options.routingDomain);
+				const targetId = String(event.options.target);
+				const currentSelected = self.selector.getTarget(routingDomain);
 
 				if (targetId === currentSelected?.id) {
-					// deselect target
-					self.selector.deleteTarget(routingDomain)
+					self.selector.deleteTarget(routingDomain);
 				} else {
-					// select target
-					const target = self.panel.targets.find((target) => target?.id === targetId)
+					const target = self.panel.targets.find((target) => target?.id === targetId);
 					if (target !== undefined) {
-						self.selector.setTarget(routingDomain, target)
+						self.selector.setTarget(routingDomain, target);
 					}
 				}
 
-				self.checkFeedbacks('selectedTarget', 'routedSource')
+				self.checkFeedbacks('selectedTarget', 'routedSource');
 			},
 		},
 		routeSelectedToTarget: {
@@ -54,7 +52,7 @@ export function UpdateActions(self: TfcRouteInstance) {
 					choices: self.panel.sources
 						.filter((source) => source != undefined)
 						.map((source) => {
-							return { id: source.id, label: source.name }
+							return { id: source.id, label: source.name };
 						}),
 					default: 'undefined',
 				},
@@ -86,20 +84,20 @@ export function UpdateActions(self: TfcRouteInstance) {
 				},
 			],
 			callback: async (event) => {
-				const routingDomain = event.options.routingDomain as number
-				const source = event.options.source as string
-				const selectedTarget = self.selector.getTarget(routingDomain)
+				const routingDomain = Number(event.options.routingDomain);
+				const source = String(event.options.source);
+				const selectedTarget = self.selector.getTarget(routingDomain);
 
 				if (selectedTarget == undefined || source == 'undefined') {
-					return
+					return;
 				}
 
-				const routeLevels: ('video' | 'audio1' | 'meta')[] = []
-				if (event.options.video) routeLevels.push('video')
-				if (event.options.audio) routeLevels.push('audio1')
-				if (event.options.meta) routeLevels.push('meta')
+				const routeLevels: ('video' | 'audio1' | 'meta')[] = [];
+				if (event.options.video) routeLevels.push('video');
+				if (event.options.audio) routeLevels.push('audio1');
+				if (event.options.meta) routeLevels.push('meta');
 
-				self.tfcRoute(routeLevels, source, selectedTarget.id)
+				void self.tfcRoute(routeLevels, source, selectedTarget.id);
 			},
 		},
 		routeSourceToTarget: {
@@ -112,7 +110,7 @@ export function UpdateActions(self: TfcRouteInstance) {
 					choices: self.panel.sources
 						.filter((source) => source != undefined)
 						.map((source) => {
-							return { id: source.id, label: source.name }
+							return { id: source.id, label: source.name };
 						}),
 					default: 'undefined',
 				},
@@ -123,7 +121,7 @@ export function UpdateActions(self: TfcRouteInstance) {
 					choices: self.panel.targets
 						.filter((target) => target != undefined)
 						.map((target) => {
-							return { id: target.id, label: target.name }
+							return { id: target.id, label: target.name };
 						}),
 					default: 'undefined',
 				},
@@ -147,74 +145,73 @@ export function UpdateActions(self: TfcRouteInstance) {
 				},
 			],
 			callback: async (event) => {
-				const routeLevels: ('video' | 'audio1' | 'meta')[] = []
-				if (event.options.video) routeLevels.push('video')
-				if (event.options.audio) routeLevels.push('audio1')
-				if (event.options.meta) routeLevels.push('meta')
+				const routeLevels: ('video' | 'audio1' | 'meta')[] = [];
+				if (event.options.video) routeLevels.push('video');
+				if (event.options.audio) routeLevels.push('audio1');
+				if (event.options.meta) routeLevels.push('meta');
 
-				const selectedSource = event.options.source as string
-				const selectedTarget = event.options.target as string
+				const selectedSource = String(event.options.source);
+				const selectedTarget = String(event.options.target);
 				if (selectedTarget != 'undefined' && selectedSource != 'undefined')
-					self.tfcRoute(routeLevels, selectedSource, selectedTarget)
+					void self.tfcRoute(routeLevels, selectedSource, selectedTarget);
 			},
 		},
 		routeByIndex: {
-    name: 'Route by SectionIndex',
-    options: [
-        {
-            type: 'textinput',
-            label: 'Source Index',
-            id: 'sourceIndex',
-            default: '0',
-            useVariables: true,
-            tooltip: 'Use the SectionIndex value shown in variables (e.g., 0, 1, 2...)'
-        },
-        {
-            type: 'textinput',
-            label: 'Target Index',
-            id: 'targetIndex',
-            default: '0',
-            useVariables: true,
-            tooltip: 'Use the SectionIndex value shown in variables (e.g., 0, 1, 2...)'
-        },
-        {
-            type: 'checkbox',
-            label: 'Video',
-            id: 'video',
-            default: true,
-        },
-        {
-            type: 'checkbox',
-            label: 'Audio',
-            id: 'audio',
-            default: true,
-        },
-        {
-            type: 'checkbox',
-            label: 'Meta',
-            id: 'meta',
-            default: false,
-        },
-    ],
-    callback: async (event, context) => {
-        const routeLevels: ('video' | 'audio1' | 'meta')[] = []
-        if (event.options.video) routeLevels.push('video')
-        if (event.options.audio) routeLevels.push('audio1')
-        if (event.options.meta) routeLevels.push('meta')
+			name: 'Route by SectionIndex',
+			options: [
+				{
+					type: 'number',
+					label: 'Source Index',
+					id: 'sourceIndex',
+					default: 0,
+					min: 0,
+					max: 999,
+					tooltip: 'SectionIndex shown in variables (0, 1, 2...)',
+				},
+				{
+					type: 'number',
+					label: 'Target Index',
+					id: 'targetIndex',
+					default: 0,
+					min: 0,
+					max: 999,
+					tooltip: 'SectionIndex shown in variables (0, 1, 2...)',
+				},
+				{
+					type: 'checkbox',
+					label: 'Video',
+					id: 'video',
+					default: true,
+				},
+				{
+					type: 'checkbox',
+					label: 'Audio',
+					id: 'audio',
+					default: true,
+				},
+				{
+					type: 'checkbox',
+					label: 'Meta',
+					id: 'meta',
+					default: false,
+				},
+			],
+			callback: async (event) => {
+				const routeLevels: ('video' | 'audio1' | 'meta')[] = [];
+				if (event.options.video) routeLevels.push('video');
+				if (event.options.audio) routeLevels.push('audio1');
+				if (event.options.meta) routeLevels.push('meta');
 
-        // Parse variables to get index values
-        const sourceIndex = parseInt(await context.parseVariablesInString(event.options.sourceIndex as string))
-        const targetIndex = parseInt(await context.parseVariablesInString(event.options.targetIndex as string))
-        
-        // Find source and target by their index property
-        const selectedSource = self.panel.sources.find(source => source?.index === sourceIndex)?.id
-        const selectedTarget = self.panel.targets.find(target => target?.index === targetIndex)?.id
-        
-        if (selectedTarget && selectedSource && 
-            selectedTarget !== 'undefined' && selectedSource !== 'undefined') {
-            self.tfcRoute(routeLevels, selectedSource, selectedTarget)
-        }
-    },
-}
-	})
+				const sourceIndex = Number(event.options.sourceIndex);
+				const targetIndex = Number(event.options.targetIndex);
+
+				const selectedSource = self.panel.sources.find((source) => source?.index === sourceIndex)?.id;
+				const selectedTarget = self.panel.targets.find((target) => target?.index === targetIndex)?.id;
+
+				if (selectedTarget && selectedSource && selectedTarget !== 'undefined' && selectedSource !== 'undefined') {
+					void self.tfcRoute(routeLevels, selectedSource, selectedTarget);
+				}
+			},
+		},
+	});
 }

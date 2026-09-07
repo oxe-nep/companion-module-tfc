@@ -1,9 +1,10 @@
 {
+	"$schema": "../node_modules/@companion-module/base/assets/manifest.schema.json",
 	"id": "tfc-routing",
 	"name": "tfc-routing",
 	"shortname": "tfc-routing",
 	"description": "Module for controlling NEP TFC via Websocket",
-	"version": "1.0.0",
+	"version": "2.0.0",
 	"license": "MIT",
 	"repository": "git+https://github.com/oxe-nep/companion-module-tfc.git",
 	"bugs": "https://github.com/bitfocus/companion-module-tfc/issues",
@@ -13,6 +14,7 @@
 			"email": "doxe@nepgroup.com"
 		}
 	],
+	"type": "connection",
 	"runtime": {
 		"type": "node22",
 		"api": "nodejs-ipc",

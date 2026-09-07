@@ -1,5 +1,5 @@
-import { getPanelBySlug } from './Panel.js'
-import { authRequest } from './request.js'
+import { getPanelBySlug } from './Panel.js';
+import { authRequest } from './request.js';
 // import { TFC } from './TFC.js'
 
 // const TFCClient = new TFC('decp.nepgroup.io', 'lkirsche@nepgroup.com', 'Luggi132415!', 5000)
@@ -39,11 +39,11 @@ import { authRequest } from './request.js'
 // 	console.log('ROUTE UPDATE', JSON.stringify(update))
 // })
 
-const TFCQFDN = 'decp.nepgroup.io'
+const TFCQFDN = 'decp.nepgroup.io';
 
 authRequest(TFCQFDN, 'lkirsche@nepgroup.com', 'Luggi132415!')
 	.then((authKey) => getPanelBySlug(TFCQFDN, authKey, 'tech'))
 	.then((panel) => {
-		console.log(JSON.stringify(panel))
+		console.log(JSON.stringify(panel));
 	})
-	.catch((reason) => console.log('ERROR: ', reason))
+	.catch((reason) => console.log('ERROR: ', reason));
