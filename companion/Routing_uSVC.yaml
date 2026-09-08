@@ -1,0 +1,338 @@
+basePath: /
+definitions:
+  apiserver.ErrorResponseBody:
+    properties:
+      request_id:
+        description: RequestId correlates the error with service logs.
+        example: 3a5abf1d-b628-41d5-83c8-a68f34f0e16c
+        type: string
+      status:
+        description: Status is the HTTP status code.
+        example: 400
+        type: integer
+      title:
+        description: Title describes why the request failed.
+        example: level is required
+        type: string
+    required:
+    - request_id
+    - status
+    - title
+    type: object
+  apiserver.IssuedRouteInstructBody:
+    properties:
+      route_instruct:
+        $ref: '#/definitions/apiserver.RouteInstructBody'
+    required:
+    - route_instruct
+    type: object
+  apiserver.PipRouteRequestSource:
+    properties:
+      level:
+        description: Level is required and identifies the routing level to switch.
+          Data routes are not supported.
+        example: video
+        type: string
+      source_tag:
+        description: SourceTag is required and is the source tag ID, or "blind" to
+          clear the level.
+        example: a8ff2f1e-bd4b-4dc3-b0e7-404421e4836e
+        type: string
+    required:
+    - level
+    - source_tag
+    type: object
+  apiserver.PostPipRouteResponse:
+    properties:
+      initial_request_time:
+        description: InitialRequestTime is the request acceptance time as Unix nanoseconds.
+        example: 1756701000123456789
+        type: integer
+      issued_route_instructs:
+        description: IssuedRouteInstructs contains the routing instruction dispatched
+          for the requested route.
+        items:
+          $ref: '#/definitions/apiserver.IssuedRouteInstructBody'
+        type: array
+      pip_id:
+        description: PipID is the requested target PIP.
+        example: d6e39d15-a223-4c83-bdc7-48aa9d2dc641
+        type: string
+      request_id:
+        description: RequestID is the supplied or generated correlation ID.
+        example: 3a5abf1d-b628-41d5-83c8-a68f34f0e16c
+        type: string
+    required:
+    - initial_request_time
+    - issued_route_instructs
+    - pip_id
+    - request_id
+    type: object
+  apiserver.PostTagRouteResponse:
+    properties:
+      initial_request_time:
+        description: InitialRequestTime is the request acceptance time as Unix nanoseconds.
+        example: 1756701000123456789
+        type: integer
+      issued_route_instructs:
+        description: IssuedRouteInstructs contains the routing instructions dispatched
+          for the requested route, including instructions for ganged targets.
+        items:
+          $ref: '#/definitions/apiserver.IssuedRouteInstructBody'
+        type: array
+      request_id:
+        description: RequestID is the supplied or generated correlation ID.
+        example: 3a5abf1d-b628-41d5-83c8-a68f34f0e16c
+        type: string
+      target_tag:
+        description: TargetTagID is the requested target tag.
+        example: 92201351-b702-4e3b-b8fa-55b7c11c24b4
+        type: string
+    required:
+    - initial_request_time
+    - issued_route_instructs
+    - request_id
+    - target_tag
+    type: object
+  apiserver.RouteInstructBody:
+    properties:
+      initial_request_time:
+        example: 1756701000123456789
+        type: integer
+      instruct:
+        items:
+          $ref: '#/definitions/apiserver.RouteInstructEntry'
+        type: array
+      multiviewer_id:
+        example: c3dbab51-af30-41e5-a13f-412b41e66556
+        type: string
+      pip_id:
+        example: d6e39d15-a223-4c83-bdc7-48aa9d2dc641
+        type: string
+      request_id:
+        example: 3a5abf1d-b628-41d5-83c8-a68f34f0e16c
+        type: string
+      target_tag:
+        example: 92201351-b702-4e3b-b8fa-55b7c11c24b4
+        type: string
+    type: object
+  apiserver.RouteInstructEntry:
+    properties:
+      breakaways:
+        items:
+          $ref: '#/definitions/esb.Breakaway'
+        type: array
+      level:
+        example: video
+        type: string
+      source_flow:
+        example: 9f46ca48-e56b-4c5a-a823-a950d90660f5
+        type: string
+      source_tag:
+        example: a8ff2f1e-bd4b-4dc3-b0e7-404421e4836e
+        type: string
+      target_flow:
+        example: 82c4f545-5b1d-43d6-9800-e5d73233af92
+        type: string
+    type: object
+  apiserver.RouteRequestBreakaway:
+    properties:
+      source_channel:
+        description: SourceChannel is the required one-based source audio channel.
+        example: 1
+        minimum: 1
+        type: integer
+      source_tag:
+        description: SourceTag is required and is the source tag ID for this channel
+          mapping, or "blind" to clear it.
+        example: 19b1c2a1-8185-4363-ab79-26c55365f15f
+        type: string
+      target_channel:
+        description: TargetChannel is the required one-based target audio channel.
+        example: 1
+        minimum: 1
+        type: integer
+    required:
+    - source_channel
+    - source_tag
+    - target_channel
+    type: object
+  apiserver.TagRouteRequestSource:
+    properties:
+      breakaways:
+        description: Breakaways optionally map individual source channels to target
+          channels.
+        items:
+          $ref: '#/definitions/apiserver.RouteRequestBreakaway'
+        type: array
+      level:
+        description: Level is required and identifies the routing level to switch.
+          Data routes are not supported.
+        example: video
+        type: string
+      source_tag:
+        description: SourceTag is the source tag ID, or "blind" to clear the level.
+          It is required unless breakaways supply the route sources.
+        example: a8ff2f1e-bd4b-4dc3-b0e7-404421e4836e
+        type: string
+    required:
+    - level
+    type: object
+  esb.Breakaway:
+    properties:
+      source_channel:
+        type: integer
+      source_flow:
+        type: string
+      source_tag:
+        description: 'TODO: Migrate to `source_tag_id`'
+        type: string
+      target_channel:
+        type: integer
+    type: object
+info:
+  contact: {}
+  description: |-
+    A core TFC service responsible for processing routing requests and generating the routing instructions drivers use to connect sender and receiver flows.
+    A 200 response confirms that the routing instruction was dispatched to the relevant driver. Route completion is asynchronous and should be confirmed using routestate.
+  title: TFC Routing API
+  version: "1.0"
+paths:
+  /healthz:
+    get:
+      description: Returns OK when the routing HTTP service is running.
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: Check service health
+      tags:
+      - Health
+  /v1/api/routing/pip/{targetPipId}:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Routes sources to a multiviewer PIP using the supplied routing levels, after confirming that the requesting user has permission to use the affected tags.
+        A 200 response confirms that the routing instruction was dispatched to the relevant driver. Route completion is asynchronous and should be confirmed using routestate.
+      parameters:
+      - description: Target PIP ID
+        in: path
+        name: targetPipId
+        required: true
+        type: string
+      - description: Optional request correlation ID. A UUID is generated when omitted.
+        in: header
+        name: X-Request-Id
+        type: string
+      - description: Levels and sources to route
+        in: body
+        name: request
+        required: true
+        schema:
+          items:
+            $ref: '#/definitions/apiserver.PipRouteRequestSource'
+          type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Routing instruction dispatched
+          schema:
+            $ref: '#/definitions/apiserver.PostPipRouteResponse'
+        "400":
+          description: Malformed or invalid request
+          schema:
+            $ref: '#/definitions/apiserver.ErrorResponseBody'
+        "401":
+          description: Missing or invalid authentication
+          schema:
+            $ref: '#/definitions/apiserver.ErrorResponseBody'
+        "403":
+          description: Route is not authorised for the caller's productions
+          schema:
+            $ref: '#/definitions/apiserver.ErrorResponseBody'
+        "404":
+          description: Target PIP does not exist
+          schema:
+            $ref: '#/definitions/apiserver.ErrorResponseBody'
+        "500":
+          description: Route construction or instruction issuance failed
+          schema:
+            $ref: '#/definitions/apiserver.ErrorResponseBody'
+      security:
+      - BearerAuth: []
+      summary: Route sources to a multiviewer PIP
+      tags:
+      - Routing
+  /v1/api/routing/tag/{targetTagId}:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Routes sources to a target tag using the supplied routing levels and optional channel breakaways, after confirming that the requesting user has permission to route all affected tags.
+        A 200 response confirms that the routing instructions were dispatched to the relevant drivers. Route completion is asynchronous and should be confirmed using routestate.
+      parameters:
+      - description: Target tag ID
+        in: path
+        name: targetTagId
+        required: true
+        type: string
+      - description: Optional request correlation ID. A UUID is generated when omitted.
+        in: header
+        name: X-Request-Id
+        type: string
+      - description: Levels and sources to route
+        in: body
+        name: request
+        required: true
+        schema:
+          items:
+            $ref: '#/definitions/apiserver.TagRouteRequestSource'
+          type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Routing instructions dispatched
+          schema:
+            $ref: '#/definitions/apiserver.PostTagRouteResponse'
+        "400":
+          description: Malformed or invalid request
+          schema:
+            $ref: '#/definitions/apiserver.ErrorResponseBody'
+        "401":
+          description: Missing or invalid authentication
+          schema:
+            $ref: '#/definitions/apiserver.ErrorResponseBody'
+        "403":
+          description: Route is not authorised for the caller's productions
+          schema:
+            $ref: '#/definitions/apiserver.ErrorResponseBody'
+        "404":
+          description: Target tag does not exist
+          schema:
+            $ref: '#/definitions/apiserver.ErrorResponseBody'
+        "500":
+          description: Route construction or instruction issuance failed
+          schema:
+            $ref: '#/definitions/apiserver.ErrorResponseBody'
+      security:
+      - BearerAuth: []
+      summary: Route sources to a target tag
+      tags:
+      - Routing
+schemes:
+- http
+- https
+securityDefinitions:
+  BearerAuth:
+    description: Bearer JWT validated by the TFC API gateway. The token must contain
+      the context and productions claims used to authorise the route.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

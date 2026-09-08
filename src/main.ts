@@ -4,17 +4,19 @@ import { UpdateVariableDefinitions } from './variables.js';
 import { UpdateActions } from './actions.js';
 import { UpdateFeedbacks } from './feedbacks.js';
 import { TFC } from './tfc/TFC.js';
-import { Panel } from './tfc/Panel.js';
+import { applyRouteUpdate, Panel } from './tfc/Panel.js';
 import { TargetSelector } from './select.js';
 
 export { UpgradeScripts } from './upgrades.js';
 
+const emptyPanel = (): Panel => ({ sources: [], targets: [] });
+
 export class TfcRouteInstance extends InstanceBase {
 	config!: ModuleConfig;
 	secrets!: ModuleSecrets;
-	connection!: TFC | null;
-	panel!: Panel;
-	selector!: TargetSelector;
+	connection: TFC | null = null;
+	panel: Panel = emptyPanel();
+	selector: TargetSelector = new TargetSelector();
 
 	constructor(internal: unknown) {
 		super(internal);
@@ -25,6 +27,7 @@ export class TfcRouteInstance extends InstanceBase {
 		this.config = config as unknown as ModuleConfig;
 		this.secrets = (secrets ?? { password: '' }) as unknown as ModuleSecrets;
 		this.selector = new TargetSelector();
+		this.panel = emptyPanel();
 
 		if (
 			!this.config.panel ||
@@ -33,22 +36,26 @@ export class TfcRouteInstance extends InstanceBase {
 			!this.secrets.password
 		) {
 			this.updateStatus(InstanceStatus.BadConfig);
+			this.updateDefinitions();
 			return;
 		}
 
 		this.updateStatus(InstanceStatus.Connecting);
-		await this.initConnection();
-		this.updateActions();
-		this.updateFeedbacks();
-		this.updateVariableDefinitions();
+		const connected = await this.initConnection();
+		this.updateDefinitions();
+
+		if (!connected) {
+			return;
+		}
 	}
 
-	async initConnection() {
+	async initConnection(): Promise<boolean> {
 		try {
-			this.connection = new TFC(this.config.url, 5000);
+			this.connection = new TFC(this.config.url);
 			this.log('debug', 'try authorize');
 			this.connection.on('connect', () => {
 				this.log('debug', 'connected to tfc');
+				this.updateStatus(InstanceStatus.Ok);
 			});
 			this.connection.on('disconnect', () => {
 				this.updateStatus(InstanceStatus.Disconnected);
@@ -58,22 +65,9 @@ export class TfcRouteInstance extends InstanceBase {
 			});
 
 			this.connection.on('route', (update) => {
+				if (!this.panel.targets.length) return;
 				this.log('debug', `received route update: ${JSON.stringify(update)}`);
-				this.panel.targets.forEach((target) => {
-					if (target === undefined || target.id !== update.target_tag) return;
-
-					target.sources.forEach((source) => {
-						const newSource = update.result.find((newSource) => newSource.level === source.level);
-						if (newSource === undefined) return;
-
-						source.id = newSource.source_tag;
-						this.log(
-							'debug',
-							`update route state of target: '${target.id}', level: '${source.level}', source: '${source.id}'`,
-						);
-					});
-				});
-
+				applyRouteUpdate(this.panel.targets, update);
 				this.checkFeedbacks('routedSource', 'routedSourceToVariableTarget');
 			});
 
@@ -82,11 +76,15 @@ export class TfcRouteInstance extends InstanceBase {
 
 			this.panel = await this.connection.getPanel(this.config.panel);
 			this.log('debug', `fetched panel \n ${JSON.stringify(this.panel)}`);
+			this.connection.watchRouteState(this.panel);
 			this.updateStatus(InstanceStatus.Ok);
+			return true;
 		} catch (error) {
 			this.log('error', `${error}`);
+			await this.destroy();
+			this.panel = emptyPanel();
 			this.updateStatus(InstanceStatus.BadConfig);
-			return;
+			return false;
 		}
 	}
 
@@ -122,8 +120,18 @@ export class TfcRouteInstance extends InstanceBase {
 				this.log('debug', `ROUTE SUCCESS: SOURCE ${source}, TARGET ${target} (levels: ${levels})`);
 			})
 			.catch((err) => {
-				this.log('error', `ROUTE FAILURE: SOURCE ${source}, TARGET ${target} (levels: ${levels}), reason ${err}`);
+				const detail = err instanceof Error && err.cause ? ` (${err.cause})` : '';
+				this.log(
+					'error',
+					`ROUTE FAILURE: SOURCE ${source}, TARGET ${target} (levels: ${levels}), reason ${err}${detail}`,
+				);
 			});
+	}
+
+	updateDefinitions() {
+		this.updateActions();
+		this.updateFeedbacks();
+		this.updateVariableDefinitions();
 	}
 
 	updateActions() {

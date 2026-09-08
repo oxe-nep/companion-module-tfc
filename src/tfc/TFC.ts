@@ -1,10 +1,21 @@
 import { EventEmitter } from 'events';
-import { WebSocket } from 'ws';
-import { TFCRequest, TFCResponse, TFCRouteSource } from './Message.js';
-import { CallStack } from './CallStack.js';
-import { v4 as UUID } from 'uuid';
-import { authRequest } from './request.js';
-import { getPanelBySlug } from './Panel.js';
+import { randomUUID } from 'crypto';
+import { RouteStateEntry, TFCResponse, TFCRouteSource } from './Message.js';
+import { TfcTokenManager, isUnauthorized } from './request.js';
+import {
+	getPanelBySlug,
+	getTagById,
+	postTagRoute,
+	routeStateFingerprint,
+	routeUpdatesFromPostResponse,
+	tagRouteState,
+	toRouteUpdate,
+	type Panel,
+	type TagResponse,
+} from './Panel.js';
+
+const DEFAULT_POLL_INTERVAL_MS = 1000;
+const POLL_FAILURES_BEFORE_DISCONNECT = 3;
 
 export interface TFCEvents {
 	connect: () => void;
@@ -18,183 +29,183 @@ export declare interface TFC {
 	emit<U extends keyof TFCEvents>(event: U, ...args: Parameters<TFCEvents[U]>): boolean;
 }
 
+/**
+ * REST TFC client per Routing uSVC + Tag uSVC.
+ *
+ * Take-route: POST /v1/api/routing/tag/{targetTagId}
+ * Live / confirm: poll GET /v1/api/tags/{id} `_embedded.route_state`
+ *
+ * Actions/feedbacks should only use `route()` and the `route` event.
+ */
 export class TFC extends EventEmitter {
-	private _ws: WebSocket;
-	private _isAlive: boolean;
-	private _isAliveTimer!: null | NodeJS.Timeout;
-	private _callStack: CallStack;
-	private _location: string;
-	private _authToken: string;
+	private readonly _tokens: TfcTokenManager;
+	private readonly _pollIntervalMs: number;
+	private _isAlive = false;
+	private _closed = false;
+	private _pollTimer: NodeJS.Timeout | null = null;
+	private _pollInFlight = false;
+	private _pollFailures = 0;
+	private _targetIds: string[] = [];
+	private readonly _routeFingerprints = new Map<string, string>();
 
-	constructor(location: string, sendTimeout: number) {
+	constructor(
+		private readonly _location: string,
+		pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
+	) {
 		super();
-		this._ws = new WebSocket(`wss://controlws.${location}/routing`);
-		this._isAlive = false;
-		this._callStack = new CallStack(sendTimeout);
-		this._location = location;
-		this._authToken = '';
-
-		this._ws.on('open', () => this.onOpen());
-		this._ws.on('close', (code, reason) => this.onClose(code, `${reason}`));
-		this._ws.on('error', (error) => this.onError(error));
-		this._ws.on('message', (data, isBinary) => this.onMessage(data, isBinary));
-		this._ws.on('ping', () => this.onPing());
+		this._tokens = new TfcTokenManager(_location);
+		this._pollIntervalMs = pollIntervalMs;
 	}
 
 	/**
-	 * Sends a route request to TFC and returns a Promise which is fulfilled when the route request
-	 * was accepted by TFC. The Promise is reject if either the socket is not connected, the request
-	 * was not accepted by TFC or a timeout occured.
+	 * Take a route over Routing REST API.
+	 * `panel` is unused by this endpoint; kept for call-site compatibility.
 	 */
-	route(panel: string, targetTag: string, ...sources: TFCRouteSource[]): Promise<void> {
-		// this creates a new random UUID we use as request_id
-		const uuid = UUID().toString();
+	route(_panel: string, targetTag: string, ...sources: TFCRouteSource[]): Promise<void> {
+		if (this._closed) {
+			return Promise.reject('closed');
+		}
+		if (sources.length === 0) {
+			return Promise.resolve();
+		}
 
-		const request: TFCRequest = {
-			request_id: uuid,
-			target_tag: targetTag,
-			request: sources,
-			type: 'route-request',
-			username: '',
-			panel: panel,
-		};
+		const requestId = randomUUID();
 
-		return this.send(request).then(
-			() =>
-				new Promise<void>((resolve, reject) => {
-					this._callStack.push(request.request_id, resolve, reject);
-				}),
-		);
-	}
-
-	close() {
-		this.onClose(200, 'closed by client');
-	}
-
-	authorize(username: string, password: string) {
-		return authRequest(this._location, username, password).then((authToken) => {
-			this._authToken = authToken;
-		});
-	}
-
-	getPanel(slug: string) {
-		return getPanelBySlug(this._location, this._authToken, slug);
-	}
-
-	/**
-	 * Sends the request to TFC and returns a Promise which is fulfilled
-	 * when the request is sent out by the underlaying socket
-	 */
-	private send(msg: TFCRequest): Promise<void> {
-		return new Promise<void>((resolve, reject) => {
-			if (!this._isAlive || this._ws.readyState != WebSocket.OPEN) {
-				reject('no connection');
-			}
-			this._ws.send(JSON.stringify(msg), (err) => {
-				if (err) {
-					reject(err);
+		return this.withAuth((token) => postTagRoute(this._location, token, targetTag, sources, requestId)).then(
+			(response) => {
+				const updates = routeUpdatesFromPostResponse(response);
+				if (updates.some((update) => update.result.length > 0)) {
+					for (const update of updates) {
+						this.publishRoute(update.target_tag, update.result, true);
+					}
 				} else {
-					resolve();
+					// 200 means dispatched; completion is async via routestate poll.
+					this.publishRoute(targetTag, sources, true);
 				}
-			});
+			},
+		);
+	}
+
+	watchRouteState(panel: Panel): void {
+		this.stopPolling();
+		this._targetIds = panel.targets
+			.filter((target): target is NonNullable<typeof target> => target != undefined)
+			.map((target) => target.id);
+
+		for (const target of panel.targets) {
+			if (target === undefined) continue;
+			this._routeFingerprints.set(
+				target.id,
+				routeStateFingerprint(target.sources.map((source) => ({ level: source.level, source_tag: source.id }))),
+			);
+		}
+
+		void this.pollOnce();
+		this._pollTimer = setInterval(() => {
+			void this.pollOnce();
+		}, this._pollIntervalMs);
+	}
+
+	close(): void {
+		this._closed = true;
+		this.stopPolling();
+		if (this._isAlive) {
+			this._isAlive = false;
+			this.emit('disconnect');
+		}
+	}
+
+	authorize(username: string, password: string): Promise<void> {
+		this._tokens.setCredentials(username, password);
+		return this._tokens.refresh().then(() => {
+			this._isAlive = true;
+			this.emit('connect');
 		});
 	}
 
-	private onOpen() {
-		this.heartbeat();
-		this.emit('connect');
+	getPanel(slug: string): Promise<Panel> {
+		return this.withAuth((token) => getPanelBySlug(this._location, token, slug));
 	}
 
-	private onClose(code: number, reason: string) {
-		this._isAlive = false;
+	private async pollOnce(): Promise<void> {
+		if (this._pollInFlight || this._closed || this._targetIds.length === 0) return;
+
+		this._pollInFlight = true;
 		try {
-			this._ws.close(code, reason);
+			const results = await Promise.allSettled(this._targetIds.map((targetId) => this.getTag(targetId)));
+			if (this._closed) return;
+
+			let anySuccess = false;
+			let failed = 0;
+
+			for (let index = 0; index < this._targetIds.length; index++) {
+				const targetId = this._targetIds[index];
+				const result = results[index];
+				if (!targetId || !result) continue;
+
+				if (result.status !== 'fulfilled') {
+					failed += 1;
+					continue;
+				}
+
+				anySuccess = true;
+				this.publishRoute(targetId, tagRouteState(result.value), false);
+			}
+
+			if (this._closed) return;
+
+			if (failed > 0) {
+				this.emit('error', `route state poll failed for ${failed} target(s)`);
+			}
+
+			if (anySuccess) {
+				this._pollFailures = 0;
+				if (!this._isAlive) {
+					this._isAlive = true;
+					this.emit('connect');
+				}
+			} else {
+				this._pollFailures += 1;
+				if (this._pollFailures >= POLL_FAILURES_BEFORE_DISCONNECT && this._isAlive) {
+					this._isAlive = false;
+					this.emit('disconnect');
+				}
+			}
+		} finally {
+			this._pollInFlight = false;
+		}
+	}
+
+	private getTag(tagId: string): Promise<TagResponse> {
+		return this.withAuth((token) => getTagById(this._location, token, tagId));
+	}
+
+	private publishRoute(targetTag: string, routeState: RouteStateEntry[], force: boolean): void {
+		const fingerprint = routeStateFingerprint(routeState);
+		if (!force && this._routeFingerprints.get(targetTag) === fingerprint) {
+			return;
+		}
+
+		this._routeFingerprints.set(targetTag, fingerprint);
+		this.emit('route', toRouteUpdate(targetTag, routeState));
+	}
+
+	private stopPolling(): void {
+		if (this._pollTimer) {
+			clearInterval(this._pollTimer);
+			this._pollTimer = null;
+		}
+		this._pollInFlight = false;
+	}
+
+	private async withAuth<T>(fn: (token: string) => Promise<T>): Promise<T> {
+		try {
+			return await fn(await this._tokens.getToken());
 		} catch (error) {
-			this.onError(new Error(`${error}`));
+			if (!isUnauthorized(error)) {
+				throw error;
+			}
+			return fn(await this._tokens.refresh());
 		}
-		if (this._isAliveTimer) {
-			clearTimeout(this._isAliveTimer);
-			this._isAliveTimer = null;
-		}
-		this.emit('disconnect');
-	}
-
-	private onError(error: Error) {
-		this.emit('error', error.message);
-	}
-
-	/**
-	 * onMessage parses incoming data from TFC.
-	 */
-	private onMessage(data: Buffer | ArrayBuffer | Buffer[], isBinary: boolean) {
-		// We don't care about binary data (only for safety)
-		if (isBinary) return;
-
-		const messageString = data.toString();
-
-		if (messageString == 'ping') {
-			this.onPing();
-			return;
-		} else if (messageString == 'pong') {
-			return;
-		}
-
-		const message = JSON.parse(messageString) as TFCResponse;
-		// We don't care about messages without request_id as they could
-		// occur but we don't want to process these further
-		if (!message.request_id) return;
-
-		if (message.status == 'success') {
-			// if it is a success message, we pretend it was our request and
-			// try to resolve the Promise from above. The callstack tells us
-			// if the request_id was indeed from us (it ignores request_id's
-			// it doesn't know)
-			this._callStack.resolve(message.request_id);
-			this.emit('route', message);
-			return;
-		}
-
-		if (message.status == 'failed') {
-			// if it is a failed message, we pretend it was our request and
-			// try to reject the Promise from above. The callstack ignores
-			// request_id's that it doesn't know so we can do that safely.
-			this._callStack.reject(message.request_id, message.message);
-		}
-	}
-
-	/**
-	 * TFC sends periodic pings but it seems they don't care about
-	 * our pings and pongs. That's why we use TFCs ping to keep track
-	 * of working connection.
-	 *
-	 * @param {Buffer<ArrayBufferLike>} data
-	 */
-	private onPing() {
-		if (this._ws.readyState == WebSocket.OPEN) {
-			this._ws.pong();
-		}
-		this.heartbeat();
-	}
-
-	/**
-	 * heartbeat keeps track of connection status. This needs to be called on every
-	 * received ping message. If it is not called, the timer will timeout and trigger
-	 * a disconnect from the TFC.
-	 */
-	private heartbeat() {
-		this._isAlive = true;
-
-		if (this._isAliveTimer) {
-			clearTimeout(this._isAliveTimer);
-			this._isAliveTimer = null;
-		}
-
-		this._isAliveTimer = setTimeout(
-			(self) => {
-				self.onClose(400, 'connection loss, no ping for 10 seconds');
-			},
-			10000,
-			this,
-		);
 	}
 }
