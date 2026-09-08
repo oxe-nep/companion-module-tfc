@@ -213,5 +213,66 @@ export function UpdateActions(self: TfcRouteInstance) {
 				}
 			},
 		},
+		routeByUuid: {
+			name: 'Route by UUID',
+			options: [
+				{
+					type: 'textinput',
+					label: 'Source Tag UUID',
+					id: 'sourceUuid',
+					default: '',
+					useVariables: true,
+					tooltip: 'TFC source tag id (UUID)',
+				},
+				{
+					type: 'textinput',
+					label: 'Target Tag UUID',
+					id: 'targetUuid',
+					default: '',
+					useVariables: true,
+					tooltip: 'TFC target tag id (UUID). Watched for feedback even if not on the panel.',
+				},
+				{
+					type: 'checkbox',
+					label: 'Video',
+					id: 'video',
+					default: true,
+				},
+				{
+					type: 'checkbox',
+					label: 'Audio',
+					id: 'audio',
+					default: true,
+				},
+				{
+					type: 'checkbox',
+					label: 'Meta',
+					id: 'meta',
+					default: false,
+				},
+			],
+			optionsToMonitorForSubscribe: ['targetUuid'],
+			subscribe: async (action) => {
+				self.bindWatchedTarget(`action:${action.id}`, String(action.options.targetUuid ?? ''));
+			},
+			unsubscribe: async (action) => {
+				self.unbindWatchedTarget(`action:${action.id}`);
+			},
+			callback: async (event) => {
+				const routeLevels: ('video' | 'audio1' | 'meta')[] = [];
+				if (event.options.video) routeLevels.push('video');
+				if (event.options.audio) routeLevels.push('audio1');
+				if (event.options.meta) routeLevels.push('meta');
+
+				const selectedSource = String(event.options.sourceUuid ?? '').trim();
+				const selectedTarget = String(event.options.targetUuid ?? '').trim();
+
+				if (selectedSource && selectedTarget) {
+					// Keep watchlist warm for variable-driven UUIDs resolved at press time.
+					self.bindWatchedTarget(`action:${event.id}`, selectedTarget);
+					void self.tfcRoute(routeLevels, selectedSource, selectedTarget);
+				}
+			},
+		},
 	});
 }

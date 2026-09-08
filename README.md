@@ -43,6 +43,7 @@ OpenAPI for the routing calls lives in [`companion/Routing_uSVC.yaml`](companion
 - **Route Source to Selected Target** — take using the current selection
 - **Route Source to Target** — take with both ends picked in the action
 - **Route by SectionIndex** — same thing, but addressed by the panel button index (handy with variables)
+- **Route by UUID** — take with source/target tag UUIDs (text fields, variables allowed). Targets used on Stream Deck buttons are added to the poll set automatically, even if they are not on the TFC panel.
 
 Levels are checkboxes: video, audio, meta.
 
@@ -51,6 +52,7 @@ Levels are checkboxes: video, audio, meta.
 - **Selected Target** — is this target selected in that domain?
 - **Routed source of selected target** — is this source currently on the selected target?
 - **Feedback on SectionIndex** — is source index N routed to target index M (optional per level)?
+- **Routed source to target by UUID** — is this source UUID currently on that target UUID (polls the target even when it is outside the configured panel)
 
 ### Variables
 

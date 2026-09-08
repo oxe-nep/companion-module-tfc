@@ -4,8 +4,9 @@ import { UpdateVariableDefinitions } from './variables.js';
 import { UpdateActions } from './actions.js';
 import { UpdateFeedbacks } from './feedbacks.js';
 import { TFC } from './tfc/TFC.js';
-import { applyRouteUpdate, Panel } from './tfc/Panel.js';
+import { applyRouteUpdate, Panel, type Target } from './tfc/Panel.js';
 import { TargetSelector } from './select.js';
+import { TargetWatchList } from './watchlist.js';
 
 export { UpgradeScripts } from './upgrades.js';
 
@@ -17,6 +18,7 @@ export class TfcRouteInstance extends InstanceBase {
 	connection: TFC | null = null;
 	panel: Panel = emptyPanel();
 	selector: TargetSelector = new TargetSelector();
+	watchList: TargetWatchList = new TargetWatchList(() => false);
 
 	constructor(internal: unknown) {
 		super(internal);
@@ -28,6 +30,7 @@ export class TfcRouteInstance extends InstanceBase {
 		this.secrets = (secrets ?? { password: '' }) as unknown as ModuleSecrets;
 		this.selector = new TargetSelector();
 		this.panel = emptyPanel();
+		this.watchList = new TargetWatchList((id) => this.panel.targets.some((target) => target?.id === id));
 
 		if (
 			!this.config.panel ||
@@ -47,6 +50,10 @@ export class TfcRouteInstance extends InstanceBase {
 		if (!connected) {
 			return;
 		}
+
+		// Re-bind any UUID actions/feedbacks already placed on the surface.
+		this.subscribeActions('routeByUuid');
+		this.checkFeedbacks('routedSourceToTargetByUuid');
 	}
 
 	async initConnection(): Promise<boolean> {
@@ -65,10 +72,10 @@ export class TfcRouteInstance extends InstanceBase {
 			});
 
 			this.connection.on('route', (update) => {
-				if (!this.panel.targets.length) return;
 				this.log('debug', `received route update: ${JSON.stringify(update)}`);
 				applyRouteUpdate(this.panel.targets, update);
-				this.checkFeedbacks('routedSource', 'routedSourceToVariableTarget');
+				applyRouteUpdate(this.watchList.extraTargets(), update);
+				this.checkFeedbacks('routedSource', 'routedSourceToVariableTarget', 'routedSourceToTargetByUuid');
 			});
 
 			await this.connection.authorize(this.config.username, this.secrets.password);
@@ -76,7 +83,7 @@ export class TfcRouteInstance extends InstanceBase {
 
 			this.panel = await this.connection.getPanel(this.config.panel);
 			this.log('debug', `fetched panel \n ${JSON.stringify(this.panel)}`);
-			this.connection.watchRouteState(this.panel);
+			this.connection.watchRouteState(this.panel, this.watchList.extraTargetIds());
 			this.updateStatus(InstanceStatus.Ok);
 			return true;
 		} catch (error) {
@@ -89,6 +96,7 @@ export class TfcRouteInstance extends InstanceBase {
 	}
 
 	async destroy() {
+		this.watchList.clear();
 		if (this.connection) {
 			this.connection.close();
 			this.connection = null;
@@ -105,6 +113,27 @@ export class TfcRouteInstance extends InstanceBase {
 
 	getConfigFields() {
 		return GetConfigFields();
+	}
+
+	getTargetById(targetId: string): Target | undefined {
+		return this.watchList.getTarget(targetId, this.panel.targets);
+	}
+
+	/** Keep TFC poll set in sync after Stream Deck bind/unbind. */
+	syncWatchList(): void {
+		this.connection?.setExtraWatchTargets(this.watchList.extraTargetIds());
+	}
+
+	bindWatchedTarget(bindingId: string, targetUuid: string): void {
+		if (this.watchList.bind(bindingId, targetUuid)) {
+			this.syncWatchList();
+		}
+	}
+
+	unbindWatchedTarget(bindingId: string): void {
+		if (this.watchList.unbind(bindingId)) {
+			this.syncWatchList();
+		}
 	}
 
 	tfcRoute(levels: ('video' | 'audio1' | 'meta')[], source: string, target: string) {

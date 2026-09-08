@@ -46,6 +46,8 @@ export class TFC extends EventEmitter {
 	private _pollInFlight = false;
 	private _pollFailures = 0;
 	private _targetIds: string[] = [];
+	private _panelTargetIds: string[] = [];
+	private _extraTargetIds: string[] = [];
 	private readonly _routeFingerprints = new Map<string, string>();
 
 	constructor(
@@ -86,11 +88,13 @@ export class TFC extends EventEmitter {
 		);
 	}
 
-	watchRouteState(panel: Panel): void {
+	watchRouteState(panel: Panel, extraTargetIds: string[] = []): void {
 		this.stopPolling();
-		this._targetIds = panel.targets
+		this._panelTargetIds = panel.targets
 			.filter((target): target is NonNullable<typeof target> => target != undefined)
 			.map((target) => target.id);
+		this._extraTargetIds = [...new Set(extraTargetIds.filter(Boolean))];
+		this.rebuildTargetIds();
 
 		for (const target of panel.targets) {
 			if (target === undefined) continue;
@@ -104,6 +108,15 @@ export class TFC extends EventEmitter {
 		this._pollTimer = setInterval(() => {
 			void this.pollOnce();
 		}, this._pollIntervalMs);
+	}
+
+	/** Update the extra (non-panel) targets included in the poll set. */
+	setExtraWatchTargets(extraTargetIds: string[]): void {
+		this._extraTargetIds = [...new Set(extraTargetIds.filter(Boolean))];
+		this.rebuildTargetIds();
+		if (this._pollTimer && this._targetIds.length > 0) {
+			void this.pollOnce();
+		}
 	}
 
 	close(): void {
@@ -125,6 +138,10 @@ export class TFC extends EventEmitter {
 
 	getPanel(slug: string): Promise<Panel> {
 		return this.withAuth((token) => getPanelBySlug(this._location, token, slug));
+	}
+
+	private rebuildTargetIds(): void {
+		this._targetIds = [...new Set([...this._panelTargetIds, ...this._extraTargetIds])];
 	}
 
 	private async pollOnce(): Promise<void> {

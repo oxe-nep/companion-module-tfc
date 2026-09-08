@@ -154,5 +154,73 @@ export function UpdateFeedbacks(self: TfcRouteInstance): void {
 				return isRouted;
 			},
 		},
+		routedSourceToTargetByUuid: {
+			name: 'Routed source to target by UUID',
+			type: 'boolean',
+			defaultStyle: {
+				bgcolor: combineRgb(0, 200, 30),
+				color: combineRgb(255, 255, 255),
+			},
+			options: [
+				{
+					type: 'textinput',
+					label: 'Source Tag UUID',
+					id: 'sourceUuid',
+					default: '',
+					useVariables: true,
+					tooltip: 'TFC source tag id (UUID)',
+				},
+				{
+					type: 'textinput',
+					label: 'Target Tag UUID',
+					id: 'targetUuid',
+					default: '',
+					useVariables: true,
+					tooltip: 'TFC target tag id (UUID). Polled even if not on the configured panel.',
+				},
+				{
+					type: 'checkbox',
+					label: 'Check Video',
+					id: 'checkVideo',
+					default: true,
+				},
+				{
+					type: 'checkbox',
+					label: 'Check Audio',
+					id: 'checkAudio',
+					default: false,
+				},
+				{
+					type: 'checkbox',
+					label: 'Check Meta',
+					id: 'checkMeta',
+					default: false,
+				},
+			],
+			unsubscribe: async (feedback) => {
+				self.unbindWatchedTarget(`feedback:${feedback.id}`);
+			},
+			callback: async (feedback) => {
+				const sourceId = String(feedback.options.sourceUuid ?? '').trim();
+				const targetId = String(feedback.options.targetUuid ?? '').trim();
+				if (!sourceId || !targetId) return false;
+
+				// API 2 has no feedback subscribe hook — register watch while evaluating.
+				self.bindWatchedTarget(`feedback:${feedback.id}`, targetId);
+
+				const target = self.getTargetById(targetId);
+				if (!target) return false;
+
+				for (const routedSource of target.sources) {
+					if (routedSource.id !== sourceId) continue;
+
+					if (feedback.options.checkVideo && routedSource.level === 'video') return true;
+					if (feedback.options.checkAudio && routedSource.level === 'audio1') return true;
+					if (feedback.options.checkMeta && routedSource.level === 'meta') return true;
+				}
+
+				return false;
+			},
+		},
 	});
 }
