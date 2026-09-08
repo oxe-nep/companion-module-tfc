@@ -16,6 +16,13 @@ import {
 
 const DEFAULT_POLL_INTERVAL_MS = 1000;
 const POLL_FAILURES_BEFORE_DISCONNECT = 3;
+/** Ignore stale poll snapshots for a target after our own take until routestate catches up. */
+const PENDING_ROUTE_GRACE_MS = 4000;
+
+type PendingRoute = {
+	expected: Map<string, string>;
+	until: number;
+};
 
 export interface TFCEvents {
 	connect: () => void;
@@ -49,6 +56,7 @@ export class TFC extends EventEmitter {
 	private _panelTargetIds: string[] = [];
 	private _extraTargetIds: string[] = [];
 	private readonly _routeFingerprints = new Map<string, string>();
+	private readonly _pendingRoutes = new Map<string, PendingRoute>();
 
 	constructor(
 		private readonly _location: string,
@@ -78,10 +86,12 @@ export class TFC extends EventEmitter {
 				const updates = routeUpdatesFromPostResponse(response);
 				if (updates.some((update) => update.result.length > 0)) {
 					for (const update of updates) {
+						this.markPendingRoute(update.target_tag, update.result);
 						this.publishRoute(update.target_tag, update.result, true);
 					}
 				} else {
 					// 200 means dispatched; completion is async via routestate poll.
+					this.markPendingRoute(targetTag, sources);
 					this.publishRoute(targetTag, sources, true);
 				}
 			},
@@ -197,10 +207,50 @@ export class TFC extends EventEmitter {
 		return this.withAuth((token) => getTagById(this._location, token, tagId));
 	}
 
+	private markPendingRoute(targetTag: string, routeState: RouteStateEntry[]): void {
+		const expected = new Map<string, string>();
+		for (const entry of routeState) {
+			if (entry.level) {
+				expected.set(entry.level, entry.source_tag);
+			}
+		}
+		if (expected.size === 0) return;
+
+		this._pendingRoutes.set(targetTag, {
+			expected,
+			until: Date.now() + PENDING_ROUTE_GRACE_MS,
+		});
+	}
+
+	private matchesPending(routeState: RouteStateEntry[], pending: PendingRoute): boolean {
+		const byLevel = new Map(routeState.map((entry) => [entry.level, entry.source_tag]));
+		for (const [level, sourceTag] of pending.expected) {
+			if (byLevel.get(level) !== sourceTag) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	private publishRoute(targetTag: string, routeState: RouteStateEntry[], force: boolean): void {
 		const fingerprint = routeStateFingerprint(routeState);
-		if (!force && this._routeFingerprints.get(targetTag) === fingerprint) {
-			return;
+
+		if (!force) {
+			const pending = this._pendingRoutes.get(targetTag);
+			if (pending) {
+				if (Date.now() > pending.until) {
+					this._pendingRoutes.delete(targetTag);
+				} else if (!this.matchesPending(routeState, pending)) {
+					// Stale poll still showing the previous crosspoint — keep optimistic state.
+					return;
+				} else {
+					this._pendingRoutes.delete(targetTag);
+				}
+			}
+
+			if (this._routeFingerprints.get(targetTag) === fingerprint) {
+				return;
+			}
 		}
 
 		this._routeFingerprints.set(targetTag, fingerprint);
@@ -213,6 +263,7 @@ export class TFC extends EventEmitter {
 			this._pollTimer = null;
 		}
 		this._pollInFlight = false;
+		this._pendingRoutes.clear();
 	}
 
 	private async withAuth<T>(fn: (token: string) => Promise<T>): Promise<T> {

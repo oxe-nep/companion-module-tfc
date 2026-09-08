@@ -4,7 +4,7 @@
 	"name": "tfc-routing",
 	"shortname": "tfc-routing",
 	"description": "Module for controlling NEP TFC routing via REST",
-	"version": "2.3.0",
+	"version": "2.4.0",
 	"license": "MIT",
 	"repository": "git+https://github.com/oxe-nep/companion-module-tfc.git",
 	"bugs": "https://github.com/bitfocus/companion-module-tfc/issues",
