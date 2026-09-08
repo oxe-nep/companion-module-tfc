@@ -56,7 +56,14 @@ Levels are checkboxes: video, audio, meta.
 
 ### Variables
 
-For each source/target on the panel you get `sectionIndex{n}` with the button label. Useful for dynamic button text and the SectionIndex actions/feedbacks.
+For each source/target on the panel you get `sectionIndex{n}` with the button label.
+
+For each panel target and level (`video`, `audio1`, `meta`) you also get:
+
+- `target_{n}_{level}_source` — label of the source currently routed on that level
+- `target_{n}_{level}_source_index` — SectionIndex of that source (empty if unknown / not on the panel)
+
+These update when route state changes (own takes and polled external routes).
 
 ## Develop
 

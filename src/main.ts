@@ -1,6 +1,6 @@
 import { InstanceBase, InstanceStatus } from '@companion-module/base';
 import { GetConfigFields, type ModuleConfig, type ModuleSecrets } from './config.js';
-import { UpdateVariableDefinitions } from './variables.js';
+import { UpdateRouteStateVariables, UpdateVariableDefinitions } from './variables.js';
 import { UpdateActions } from './actions.js';
 import { UpdateFeedbacks } from './feedbacks.js';
 import { TFC } from './tfc/TFC.js';
@@ -75,6 +75,7 @@ export class TfcRouteInstance extends InstanceBase {
 				this.log('debug', `received route update: ${JSON.stringify(update)}`);
 				applyRouteUpdate(this.panel.targets, update);
 				applyRouteUpdate(this.watchList.extraTargets(), update);
+				UpdateRouteStateVariables(this);
 				this.checkFeedbacks('routedSource', 'routedSourceToVariableTarget', 'routedSourceToTargetByUuid');
 			});
 
